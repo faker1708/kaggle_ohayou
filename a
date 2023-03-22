@@ -1,0 +1,498 @@
+CSDN首页
+博客
+下载
+学习
+社区
+GitCode 
+云服务
+猿如意
+深度学习
+ 搜索
+
+会员中心 
+消息
+历史
+创作中心
+发布
+Kaggle入门Titanic详解
+
+spln13
+
+于 2021-11-22 18:06:32 发布
+
+508
+ 收藏 2
+文章标签： python 机器学习 深度学习 神经网络
+版权
+Kaggle入门Titanic详解
+一、数据集下载
+二、数据集处理
+三、定义网络
+四、训练
+五、生成输出
+六、提交
+一、数据集下载
+进入 https://www.kaggle.com/c/titanic 比赛页面，下载数据集.
+在这里插入图片描述
+
+二、数据集处理
+import 需要用到的包
+
+import numpy as np
+import pandas as pd
+import matplotlib as plt
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader, TensorDataset
+1
+2
+3
+4
+5
+6
+读取训练集和测试集，并查看训练集的前十行
+
+dftrain_raw = pd.read_csv('dataset/train.csv')
+dftest_raw = pd.read_csv('dataset/test.csv')
+PassengerId = dftest_raw['PassengerId']
+dftrain_raw.head(10)
+1
+2
+3
+4
+在这里插入图片描述看到训练集有12个属性，筛选一下，有用的属性有Pclass, Sex, Age, Sibsp, parch, fare, Carbin, Embarked，处理数据集：
+
+def preprocessing(dfdata):
+
+    dfresult= pd.DataFrame()
+
+    #Pclass
+    dfPclass = pd.get_dummies(dfdata['Pclass'])
+    dfPclass.columns = ['Pclass_' + str(x) for x in dfPclass.columns ]
+    dfresult = pd.concat([dfresult,dfPclass],axis = 1)
+
+    #Sex
+    dfSex = pd.get_dummies(dfdata['Sex'])
+    dfresult = pd.concat([dfresult,dfSex],axis = 1)
+
+    #Age
+    dfresult['Age'] = dfdata['Age'].fillna(0)
+    dfresult['Age_null'] = pd.isna(dfdata['Age']).astype('int32')
+
+    #SibSp,Parch,Fare
+    dfresult['SibSp'] = dfdata['SibSp']
+    dfresult['Parch'] = dfdata['Parch']
+    dfresult['Fare'] = dfdata['Fare']
+
+    #Carbin
+    dfresult['Cabin_null'] =  pd.isna(dfdata['Cabin']).astype('int32')
+
+    #Embarked
+    dfEmbarked = pd.get_dummies(dfdata['Embarked'],dummy_na=True)
+    dfEmbarked.columns = ['Embarked_' + str(x) for x in dfEmbarked.columns]
+    dfresult = pd.concat([dfresult,dfEmbarked],axis = 1)
+
+    return(dfresult)
+
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+处理后的结果
+
+x_temp = preprocessing(dftrain_raw)
+print(x_temp)
+
+1
+2
+3
+在这里插入图片描述
+处理训练集和测试集
+
+x_train = preprocessing(dftrain_raw).values
+y_train = dftrain_raw[['Survived']].values
+
+x_test = preprocessing(dftest_raw).values
+print("x_train.shape =", x_train.shape )
+print("y_train.shape =", y_train.shape )
+
+print("x_test.shape =", x_test.shape)
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+在这里插入图片描述
+使用Dataloader装载训练集
+
+dl_train = DataLoader(TensorDataset(torch.tensor(x_train).float(),torch.tensor(y_train).float()),
+                     shuffle = True, batch_size = 8)
+
+1
+2
+3
+三、定义网络
+这里使用了简单的线性网络
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(15, 30),
+            nn.ReLU(),
+            nn.Linear(30, 15),
+            nn.ReLU(),
+            nn.Linear(15, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x: torch.FloatTensor):
+        return self.net(x)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+创建网络对象
+
+net = Net()
+print(net)
+1
+2
+在这里插入图片描述
+查看网络相关参数
+
+from torchkeras import summary
+summary(net,input_shape=(15,))
+1
+2
+在这里插入图片描述
+定义优化器和损失函数
+
+optim = torch.optim.Adam(Net.parameters(net), lr=0.001)
+Loss = nn.MSELoss()
+1
+2
+四、训练
+训练100轮
+
+for epoch in range(100):
+    loss = None
+    for batch_x, batch_y in dl_train:
+        y_predict = net(batch_x)
+        loss = Loss(y_predict, batch_y)
+        optim.zero_grad()
+        loss.backward()
+        optim.step()
+    if (epoch % 10 == 0):
+        print("epoch: %d => loss: %f" % (epoch, loss.item()))
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+在这里插入图片描述
+
+五、生成输出
+predict = net(torch.tensor(x_test, dtype=torch.float))
+predict = predict.detach().numpy()
+predict = predict.reshape(418)
+print(predict.shape)
+print(PassengerId.shape)
+1
+2
+3
+4
+5
+predict = np.round(predict)
+predict = predict.astype(int)
+1
+2
+生成csv文件
+
+submission = pd.DataFrame({"PassengerId": PassengerId, "Survived": predict})
+submission.to_csv("titanic-submission.csv", index=False)
+1
+2
+六、提交
+在这里插入图片描述
+把csv文件提交就ok了
+
+文章知识点与官方知识档案匹配，可进一步学习相关知识
+OpenCV技能树OpenCV中的深度学习图像分类14605 人正在系统学习中
+
+spln13
+关注
+
+2
+
+
+2
+打赏
+
+2
+
+Titanic数据集——Kaggle上下载
+09-04
+Titanic数据集——Kaggle上下载
+Kaggle系列（1）——Titanic
+从此醉
+ 953
+机器学习系列（14）——Kaggle项目之Titanic 文章目录机器学习系列（14）——Kaggle项目之Titanic0x01、项目介绍0x02、学习过程简述0x03、数据探索与分析1、数据探索2、分析过程0x03、预处理0x04、第一个模型0x05、模型优化0x05、模型融合参考文献 0x01、项目介绍 学习了各种机器学习算法之后，可以找一个简单项目来练练手，感受一下完整的ML过程。Titanic是Kaggle的入门项目，网上可以找到很多资料，所以选择它作为第一个练手的项目。（记录一下哈哈哈，截止到2
+评论2条写评论
+Tisfy
+热评
+万字长文表情包 博主辛苦表情包
+kaggle实战之Titanic - Machine Learning from Disaster_xz---的...
+3-10
+我们就从kaggle上经典的Titanic项目来进行一个简单的分析。这个项目的是需要我们通过他给的数据集来预测哪种人更容易存活,这便是我们分析的切入点。再对数据清洗之后选取数据集中的目标特征,然后选择合适的算法进行预测,最后将预测结果上传...
+Titanic(Kaggle)-数据处理(1)
+3-13
+Titanic(Kaggle)-数据处理(1) 数据集介绍: PassengerId乘客编号,Survived是否被救, Parch 父母子女数量,SibSP兄弟姐妹配偶数, Pclass客舱等级, Pclass登船港口,Ticket票号,Fare票价,Cabin客舱号 Cabin:缺失值很多, Fare票价由客舱等级决定...
+Kaggle竞赛 —— 泰坦尼克号（Titanic）
+热门推荐
+massquantity的博客
+ 2万+
+kaggle Titanic数据分析
+Titanic 泰坦尼克之灾 | Kaggle| 入门 1
+yonsan_的博客
+ 189
+写这篇博客，有两个目的：1. 我是一个kaggle新手，刚刚完成这个入门项目，想做一个总结。2. 给别的小伙伴讲讲这个项目，顺便提升自己的理解。如果文中有问题，请在 评论区一起讨论，谢谢。流程总结：1. 观察数据，通常使用data.head() 和data.columns.unique()来观察数据的大概情况和特征情况。2. 数据清洗3. 特征提取4. 建立模型5. 输出结果像很多课程中的机器学习项目一样，titanic项目也是通过使用一组数据（特征）来完成对船上的人是否存活的预测。我们先来看看这个项目的数
+kaggle商品数据集_kaggle项目之Titanic数据集_weixin_39778447的博客-CS...
+3-11
+kaggle商品数据集_kaggle项目之Titanic数据集 本例主要针对kaggle上的Titanic数据集进行分析预测,文章主体分为以下两个部分: 机器学习流程的回顾 Titanic数据集的分析和处理 image PS:流程回顾来源于Udacity的机器学习入门课程,Titanic数据的...
+Kaggle竞赛——Titanic泰坦尼克之灾(保姆级基础版)_Apollo丶小杨的博客...
+2-22
+Kaggle竞赛网址:https://www.kaggle.com/c/titanic 本次Kaggle泰坦尼克之灾分析过程大致分为: 第1步:了解数据第2步:分析数据之间的关系第3步:缺失项数据处理第4步:特征因子化第5步:处理特殊值或浮动较大的数值第6步:数据筛选第7步...
+
+机器学习入门：Kaggle -titanic(泰坦尼克)生存预测
+cutenew52188的博客
+ 4324
+萌新入门机器学习的第一个手把手案例 零基础尝试Kaggle-Titanic - Machine Learning from Disaster 附代码
+数分项目《泰坦尼克》——Task1
+最新发布
+qq_40530187的博客
+ 395
+数据分析项目的第一步：载入并观察数据，对数据做初步整理
+泰坦尼克号数据集处理
+m0_59324564的博客
+ 3180
+1、导入数据库 import tensorflow as tf import numpy as np import matplotlib.pyplot as plt import pandas as pd import urllib.request import os %matplotlib inline print("Tensorflow版本是:",tf.__version__) 2、下载泰坦尼克号上旅客的数据集 下载旅客数据集 data_url="http://biostat.mc.v
+kaggle机器学习竞赛泰坦尼克号船员数据集
+06-09
+kaggle机器学习竞赛泰坦尼克号船员数据集，原网址https://www.kaggle.com/c/titanic
+Titanic 泰坦尼克号预测-Tensorflow 方法-【Kaggle 比赛】
+我的一些代码。。。
+ 824
+本文介绍Kaggle入门比赛Titanic泰坦尼克号幸存预测的解题思路，使用的是神经网络和Tensorflow框架。提交代码附在本文的最后部分。 基本思路为: 1.导入数据集 2.对数据预处理 3.训练 4.预测并输出结果............
+泰坦尼克号数据集的下载
+Kailin_lin的博客
+ 1万+
+这是一个常用的数据，给大家个链接，可以去该链接下载数据集http://biostat.mc.vanderbilt.edu/wiki/pub/Main/DataSets/titanic.txt
+kaggle-titanic:适用于Kaggle Titanic竞赛的Jupyter笔记本
+04-05
+卡格勒-泰坦尼克号 适用于Kaggle Titanic竞赛的Jupyter笔记本 诊断以改进Titanic Kaggle竞赛中的模型 ，2021年4月 1912年4月15日发生的泰坦尼克号沉没是历史上最著名的海难之一。 它构成了Kaggle入门的基础。 这场比赛的基础是二进制分类问题：根据泰坦尼克号上乘客的特征，预测泰坦尼克号沉没后他们是否还幸免于难。 在本笔记本中，我将经历设计最佳模型以预测生存的过程： 对问题的理解 数据探索 清理数据 特征工程 选型 模型的超参数优化 模型测试 我在Kaggle竞赛中补充了机器学习问题的这些常见元素，重点是以下内容： 使用混淆矩阵，ROC曲线和曲线下面积（AUC）分数评估模型预测。 这样可以深入了解修改二元分类器的阈值，以减少误报或误报（I型和II型错误），这适用于许多二元分类问题，例如医疗保健中的问题。 诊断会根据模型中存在偏差或变异的证据，
+Datawhale---动手学数据分析---第一章：数据载入及初步观察(泰坦尼克的任务)
+m0_64222985的博客
+ 245
+数据集下载 Titanic - Machine Learning from Disaster | Kaggle 1.1.2 任务二：载入数据 (1) 使用相对路径载入数据 (2) 使用绝对路径载入数据 【提示】相对路径载入报错时，尝试使用os.getcwd()查看当前工作目录。 【思考】知道数据加载的方法后，试试pd.read_csv()和pd.read_table()的不同，如果想让他们效果一样，需要怎么做？了解一下'.tsv'和'.csv'的不同，如何加载这两个数据集？注意：r
+kaggle——Titanic泰坦尼克之灾
+weixin_56184890的博客
+ 475
+1）目标 任务网址：kaggle_泰坦尼克号 1912年4月15日，在她的处女航中，被广泛认为的泰坦尼克号与冰山相撞后沉没。不幸的是，船上没有足够的救生艇供所有人使用，导致2224名乘客和机组人员中的1502人死亡。 尽管幸存者有一些运气，但似乎有些人比其他人更有可能生存。 在这一挑战中，我们要求您建立一个预测模型来回答以下问题：“什么样的人更有可能生存？” 使用旅客数据（即姓名，年龄，性别，社会经济舱等）。 2）流程思路 1.数据分析与处理（非常重要） 2.建立简单模型 3.训练并评估 4.修改模型 5.
+机器学习实战——kaggle 泰坦尼克号生存预测——六种算法模型实现与比较
+yangshaojun1992的博客
+ 1万+
+一、初识 kaggle kaggle是一个非常适合初学者去实操实战技能的一个网站，它可以根据你做的项目来评估你的得分和排名。让你对自己的能力有更清楚的了解，当然，在这个网站上，也有很多项目的教程，可以跟着教程走，慢慢熟悉各种操作。在平时的学习中，我们了解到的知识更多的是理论，缺少一个实战的平台，项目的练习。我对kaggle的了解也是基于实战的需要，想做一些项目来巩固我的认知，发现更多有用的技能。 kaggle 竞赛，里面有很多项目，对熟悉数据处理与学习各种算法帮助很大。 二、项目介绍 完整代码见k.
+kaggle泰坦尼克号生存预测（附代码、数据集和答案）
+qq_43012160的博客
+ 2万+
+kaggle泰坦尼克号生存预测（附代码、数据集和答案） 之前总结的数据预处理方法：https://blog.csdn.net/qq_43012160/article/details/98462307 先看一下数据集： 这次需要分类的标签被存储在了训练集的Survived列里，1表示生还，0表示遇难。 显然这次的特征是有缺失值的，读入数据集，看一下训练集和测试集的长度及各特征的缺失情况： #看...
+Dataset：titanic(泰坦尼克号)数据集(是否获救二分类预测)的简介、下载、案例应用之详细攻略
+心比天高，仗剑走天涯，保持热爱，奔赴向梦想！低调，谦虚，自律，反思，成长，还算是比较正能量的博主，公益免费传播……
+ 6021
+泰坦尼克号沉船事故。1912年，当时隶属于英国的世界级豪华客轮泰坦尼克号，因在处女航行中不幸撞上北大西洋冰山而沉没。这场事故使得1500多名乘客罹难。后来，这场震惊世界的惨剧被详细地调查，而且遇难乘客的信息也逐渐被披露。在当时的救援条件下，无法在短时间内确认每位乘客生还的可能性。而今，许多科学家试图通过计算机模拟和分析找出潜藏在数据背后的生还逻辑，通过人工智能算法，尝试揭开这尘封了 100多年的数据的面纱。titanic泰坦尼克号是当时世界上体积最庞大、内部设施最豪华的客运轮船，有“永不沉没”的美誉。...
+kaggle 泰坦尼克titanic数据
+01-15
+友情提示，kaggle注册帐号发送验证邮件时验证码貌似是使用了谷歌的服务，如果没有梯子是刷不出验证码无法验证账号的，没有梯子的话可以考虑注册雅虎账号然后用雅虎账号登录kaggle。不过有时一些数据的下载好像也会用到谷歌。这个数据本来想0分的，不过现在好像最低要求是2分。
+Kaggle竞赛——Titanic
+Spike的博客
+ 308
+​​ 找回了自己的CSDN账号，想从头记录一下自己做kaggle竞赛的经历，第一篇当然要从人人都爱的Titanic写起。​ Titanic项目大概是Kaggle上最受欢迎的项目了，截止到我提交结果的时候已经有18000多人提交了预测结果。参与人数众多，也诞生了很多优秀的kernel，使这个项目成为了萌新熟悉kaggle竞赛的唯一指定项目。大佬们分享的经验就像出新手村的首冲礼包，能让你在数据分析的路上快速成长。 项目简介​ 首先我们看一下这个项目的介绍（因为懒这里就放了官方的介绍）： The sinki
+kaggle实战——titanic分析
+weixin_42957905的博客
+ 494
+kaggle实战——titanic分析
+“相关推荐”对你有帮助么？
+
+非常没帮助
+
+没帮助
+
+一般
+
+有帮助
+
+非常有帮助
+关于我们
+招贤纳士
+商务合作
+寻求报道
+
+400-660-0108
+
+kefu@csdn.net
+
+在线客服
+工作时间 8:30-22:00
+公安备案号11010502030143
+京ICP备19004658号
+京网文〔2020〕1039-165号
+经营性网站备案信息
+北京互联网违法和不良信息举报中心
+家长监护
+网络110报警服务
+中国互联网举报中心
+Chrome商店下载
+账号管理规范
+版权与免责声明
+版权申诉
+出版物许可证
+营业执照
+©1999-2023北京创新乐知网络技术有限公司
+
+spln13
+码龄4年
+ 暂无认证
+5
+原创
+13万+
+周排名
+124万+
+总排名
+7940
+访问
+
+等级
+120
+积分
+18
+粉丝
+44
+获赞
+17
+评论
+100
+收藏
+签到新秀
+领英
+勤写标兵
+技术圈认证
+新人勋章
+阅读者勋章
+私信
+关注
+搜博主文章
+
+热门文章
+使用哈夫曼算法对文件进行压缩和解压  6149
+Python库 numpy基础内容学习笔记  822
+Kaggle入门Titanic详解  507
+数据库系统概论考点  326
+Python库 Pandas 基础内容 学习笔记  131
+最新评论
+使用哈夫曼算法对文件进行压缩和解压
+a8585858: 那个写入文件为啥parent-=LeafNumber啊
+
+Kaggle入门Titanic详解
+spln13: 万字评论Tisfy辛苦！表情包表情包
+
+Kaggle入门Titanic详解
+Tisfy: 万字长文表情包 博主辛苦表情包
+
+Python库 Pandas 基础内容 学习笔记
+谁吃薄荷糖: 日常催更，期待大佬新作，期待大佬有空来指点指点我的博文
+
+Python库 Pandas 基础内容 学习笔记
+指间理想: 讲得很好
+
+您愿意向朋友推荐“博客详情页”吗？
+
+强烈不推荐
+
+不推荐
+
+一般般
+
+推荐
+
+强烈推荐
+
+目录
+Kaggle入门Titanic详解
+一、数据集下载
+二、数据集处理
+三、定义网络
+四、训练
+五、生成输出
+六、提交
+
+最新文章
+数据库系统概论考点
+Python库 Pandas 基础内容 学习笔记
+Python库 numpy基础内容学习笔记
+2022年1篇2021年1篇2020年3篇
+
+
+
+
+举报

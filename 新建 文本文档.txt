@@ -6,3 +6,8 @@
 就别人用了，收敛了，你继续发展它就完了。不要去证明，太难了。
 
 
+下载
+
+https://www.kaggle.com/competitions/titanic/data
+点击 download all 按钮
+
