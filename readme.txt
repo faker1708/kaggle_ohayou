@@ -11,3 +11,11 @@
 https://www.kaggle.com/competitions/titanic/data
 点击 download all 按钮
 
+
+
+ok 我们结束 。不做深入研究。点到为止。
+
+还是想说，真的，好教程帮你完成一半的活。
+我们不仅不要造轮子，要站在前人的基础上，我们还要找一个好的教程。好教程真的舒服。
+
+
